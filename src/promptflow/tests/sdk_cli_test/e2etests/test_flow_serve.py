@@ -647,3 +647,19 @@ def test_eager_flow_with_init(callable_class):
     ), f"Response code indicates error {response2.status_code} - {response2.data.decode()}"
     response2 = json.loads(response2.data.decode())
     assert response1 == response2
+
+
+@pytest.mark.e2etest
+def test_eager_flow_evc(eager_flow_evc):
+    response = eager_flow_evc.post("/score", data=json.dumps({}))
+    assert (
+        response.status_code == 200
+    ), f"Response code indicates error {response.status_code} - {response.data.decode()}"
+    response = json.loads(response.data.decode())
+    assert response == "Hello world! azure"
+
+
+@pytest.mark.e2etest
+def test_eager_flow_evc_override(eager_flow_evc):
+    # TODO: add this
+    pass

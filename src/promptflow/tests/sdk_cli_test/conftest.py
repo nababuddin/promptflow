@@ -247,6 +247,11 @@ def callable_class(mocker: MockerFixture):
     return create_client_by_model("callable_class", mocker, model_root=EAGER_FLOW_ROOT, inits={"obj_input": "input1"})
 
 
+@pytest.fixture
+def eager_flow_evc(mocker: MockerFixture):
+    return create_client_by_model("environment_variables_connection", mocker, model_root=EAGER_FLOW_ROOT)
+
+
 # ==================== Recording injection ====================
 # To inject patches in subprocesses, add new mock method in setup_recording_injection_if_enabled
 # in fork mode, this is automatically enabled.
