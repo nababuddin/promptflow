@@ -11,6 +11,7 @@ from promptflow.exceptions import UserErrorException
 
 PROMOTFLOW_ROOT = Path(__file__).parent.parent.parent.parent
 FLOWS_DIR = Path(PROMOTFLOW_ROOT / "tests/test_configs/flows")
+EAGER_FLOWS_DIR = Path(PROMOTFLOW_ROOT / "tests/test_configs/eager_flows")
 EXAMPLE_FLOW = FLOWS_DIR / "web_classification"
 
 
@@ -35,3 +36,14 @@ class TestFlowInvoker:
         with pytest.raises(UnexpectedConnectionProviderReturn) as e:
             FlowInvoker(flow=EXAMPLE_FLOW, connection_provider=lambda: [1, 2])
         assert "should be connection type" in str(e.value)
+
+    def test_invoke_callable_class(self):
+        invoker = FlowInvoker(flow=EAGER_FLOWS_DIR / "callable_class", inits={"obj_input": "input1"}, raise_ex=True)
+        result1 = invoker.invoke(data={"func_input": "input2"})
+        assert result1["func_input"] == "input2"
+        assert result1["obj_input"] == "input1"
+
+        result2 = invoker.invoke(data={"func_input": "input2"})
+        assert result2["func_input"] == "input2"
+        assert result2["obj_input"] == "input1"
+        assert result2 == result1

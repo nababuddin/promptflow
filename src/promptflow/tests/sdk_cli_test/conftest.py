@@ -160,6 +160,7 @@ def create_client_by_model(
     extension_type=None,
     environment_variables={},
     model_root=MODEL_ROOT,
+    inits=None,
 ):
     model_path = (Path(model_root) / model_name).resolve().absolute().as_posix()
     mocker.patch.dict(os.environ, {"PROMPTFLOW_PROJECT_PATH": model_path})
@@ -167,7 +168,7 @@ def create_client_by_model(
         mocker.patch.dict(os.environ, connections)
     if extension_type and extension_type == "azureml":
         environment_variables["API_TYPE"] = "${azure_open_ai_connection.api_type}"
-    app = create_serving_app(environment_variables=environment_variables, extension_type=extension_type)
+    app = create_serving_app(environment_variables=environment_variables, extension_type=extension_type, inits=inits)
     app.config.update(
         {
             "TESTING": True,
@@ -239,6 +240,11 @@ def stream_output(mocker: MockerFixture):
 @pytest.fixture
 def multiple_stream_outputs(mocker: MockerFixture):
     return create_client_by_model("multiple_stream_outputs", mocker, model_root=EAGER_FLOW_ROOT)
+
+
+@pytest.fixture
+def callable_class(mocker: MockerFixture):
+    return create_client_by_model("callable_class", mocker, model_root=EAGER_FLOW_ROOT, inits={"obj_input": "input1"})
 
 
 # ==================== Recording injection ====================
