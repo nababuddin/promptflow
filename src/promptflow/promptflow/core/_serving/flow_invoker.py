@@ -55,10 +55,13 @@ class FlowInvoker:
         connections: dict = None,
         connections_name_overrides: dict = None,
         raise_ex: bool = True,
+        inits: dict = None,
         **kwargs,
     ):
         self.logger = kwargs.get("logger", LoggerFactory.get_logger("flowinvoker"))
         self.flow_entity = flow if isinstance(flow, Flow) else load_flow(source=flow)
+        self._inits = inits or {}
+        self.logger.info(f"Init flow invoker with inits: {self._inits}")
         self.flow = self.flow_entity._init_executable()
         self.connections = connections or {}
         self.connections_name_overrides = connections_name_overrides or {}
@@ -132,6 +135,7 @@ class FlowInvoker:
             connections=self.connections,
             raise_ex=self.raise_ex,
             storage=storage,
+            inits=self._inits,
         )
         self.executor.enable_streaming_for_llm_flow(self.streaming)
         self.logger.info("Promptflow executor initiated successfully.")

@@ -334,3 +334,14 @@ def add_param_flow_name(parser):
         required=True,
         help="The name of the flow.",
     )
+
+
+def add_param_inits(parser):
+    parser.add_argument(
+        "--inits",
+        action=FlowTestInputAction,
+        help="Callable class initialization params. "
+        "Only valid when provided flow is a flex flow with callable class entry. "
+        "Example: --inits param1=val1 param2=val2",
+        nargs="+",
+    )

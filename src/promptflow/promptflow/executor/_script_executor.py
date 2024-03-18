@@ -6,7 +6,7 @@ import uuid
 from dataclasses import is_dataclass
 from pathlib import Path
 from types import GeneratorType
-from typing import Any, Callable, Mapping, Optional
+from typing import Any, Callable, Dict, Mapping, Optional
 
 from promptflow._constants import LINE_NUMBER_KEY
 from promptflow._core.run_tracker import RunTracker
@@ -33,17 +33,21 @@ class ScriptExecutor(FlowExecutor):
         working_dir: Optional[Path] = None,
         *,
         storage: Optional[AbstractRunStorage] = None,
+        raise_ex: bool = False,
+        inits: Optional[Dict[str, Any]] = None,
     ):
         logger.debug(f"Start initializing the executor with {flow_file}.")
 
         self._flow_file = flow_file
         self._working_dir = Flow._resolve_working_dir(flow_file, working_dir)
-        self._initialize_function()
+        self._inits = inits or {}
+        self._initialize_function(inits=inits)
         self._connections = connections
         self._storage = storage or DefaultRunStorage()
         self._flow_id = "default_flow_id"
         self._log_interval = 60
         self._line_timeout_sec = 600
+        self._raise_ex = raise_ex
 
     def exec_line(
         self,
@@ -96,6 +100,8 @@ class ScriptExecutor(FlowExecutor):
             if not traces:
                 traces = Tracer.end_tracing(line_run_id)
             run_tracker.end_run(line_run_id, ex=e, traces=traces)
+            if self._raise_ex:
+                raise
         finally:
             run_tracker.persist_flow_run(run_info)
         line_result = LineResult(output, {}, run_info, {})
@@ -125,11 +131,23 @@ class ScriptExecutor(FlowExecutor):
     def get_inputs_definition(self):
         return self._inputs
 
-    def _initialize_function(self):
+    def _initialize_function(self, inits: dict = None):
+        inits = inits or {}
         module_name, func_name = self._parse_flow_file()
         module = importlib.import_module(module_name)
         func = getattr(module, func_name, None)
-        if func is None or not inspect.isfunction(func):
+        # check if func is a callable class
+        if inspect.isclass(func):
+            if hasattr(func, "__call__"):
+                obj = func(**inits)
+                func = getattr(obj, "__call__")
+            else:
+                raise PythonLoadError(
+                    message_format="Python class entry '{func_name}' does not have __call__ method.",
+                    func_name=func_name,
+                    module_name=module_name,
+                )
+        elif func is None or not inspect.isfunction(func):
             raise PythonLoadError(
                 message_format="Failed to load python function '{func_name}' from file '{module_name}'.",
                 func_name=func_name,

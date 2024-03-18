@@ -71,6 +71,10 @@ class PromptflowServingApp(Flask):
             self.connection_provider = self.extension.get_connection_provider()
             self.credential = self.extension.get_credential()
             self.sample = get_sample_json(self.project_path, logger)
+
+            self.inits = kwargs.get("inits", {})
+            logger.info("Init params: " + str(self.inits))
+
             self.init_swagger()
             # try to initialize the flow invoker
             try:
@@ -103,6 +107,7 @@ class PromptflowServingApp(Flask):
             # for serving, we don't need to persist intermediate result, this is to avoid memory leak.
             storage=DummyRunStorage(),
             credential=self.credential,
+            inits=self.inits,
         )
         self.flow = self.flow_invoker.flow
         # Set the flow name as folder name
