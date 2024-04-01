@@ -9,7 +9,7 @@ from promptflow.entities import AzureOpenAIConnection
 from pathlib import Path
 
 
-class GroundednessEvaluator:
+class SimilarityEvaluator:
     def __init__(self, model_config: AzureOpenAIConnection, deployment_name: str):
         """
         Initialize an evaluator configured for a specific Azure OpenAI model.
@@ -23,11 +23,11 @@ class GroundednessEvaluator:
 
         .. code-block:: python
 
-            eval_fn = GroundednessEvaluator(model_config, deployment_name="gpt-4")
+            eval_fn = SimilarityEvaluator(model_config, deployment_name="gpt-4")
             result = eval_fn(
+                question="What is the capital of Japan?",
                 answer="The capital of Japan is Tokyo.",
-                context="Tokyo is Japan's capital, known for its blend of traditional culture \
-                    and technological advancements.")
+                ground_truth="Tokyo is Japan's capital.")
         """
 
         # Load the flow as function
@@ -48,16 +48,18 @@ class GroundednessEvaluator:
             }
         }
 
-    def __call__(self, *, answer: str, context: str, **kwargs):
-        """Evaluate groundedness of the answer in the context.
+    def __call__(self, *, question: str, answer: str, ground_truth: str, **kwargs):
+        """Evaluate similarity.
 
+        :param question: The question to be evaluated.
+        :type question: str
         :param answer: The answer to be evaluated.
         :type answer: str
-        :param context: The context in which the answer is evaluated.
-        :type context: str
-        :return: The groundedness score.
+        :param ground_truth: The ground truth to be evaluated.
+        :type ground_truth: str
+        :return: The similarity score.
         :rtype: dict
         """
 
         # Run the evaluation flow
-        return self._flow(answer=answer, context=context)
+        return self._flow(question=question, answer=answer, ground_truth=ground_truth)

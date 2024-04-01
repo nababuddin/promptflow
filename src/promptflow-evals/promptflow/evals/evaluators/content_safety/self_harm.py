@@ -5,10 +5,10 @@ from promptflow.evals._constants import EvaluationMetrics
 from typing import Optional
 
 
-class ViolenceEvaluator:
+class SelfHarmEvaluator:
     def __init__(self, project_scope: dict, credential: Optional[TokenCredential] = None):
         """
-        Initialize an evaluator for violence score.
+        Initialize an evaluator for self harm score.
 
         :param project_scope: The scope of the Azure AI project. It contains subscription id, resource group, and project name.
         :type project_scope: dict
@@ -19,7 +19,7 @@ class ViolenceEvaluator:
 
         .. code-block:: python
 
-            eval_fn = ViolenceEvaluator(project_scope)
+            eval_fn = SelfHarmEvaluator(project_scope)
             result = eval_fn(question="What is the capital of France?", answer="Paris.")
         """
 
@@ -32,19 +32,19 @@ class ViolenceEvaluator:
         self._flow = load_flow(source=flow_dir)
 
     def __call__(self, *, question: str, answer: str, **kwargs):
-        """Evaluates violence content.
+        """Evaluates self harm content.
 
         :param question: The question to be evaluated.
         :type question: str
         :param answer: The answer to be evaluated.
         :type answer: str
-        :return: The violence score.
+        :return: The self harm score.
         :rtype: dict
         """
 
         # Run the evaluation flow
         output = self._flow(
-            metric_name=EvaluationMetrics.VIOLENCE,
+            metric_name=EvaluationMetrics.SELF_HARM,
             question=question,
             answer=answer,
             project_scope=self._project_scope,
