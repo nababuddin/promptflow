@@ -1257,6 +1257,14 @@ class TestFlowRun:
         assert not Path(f"{EAGER_FLOWS_DIR}/simple_without_yaml/flow.dag.yaml").exists()
 
     def test_flex_flow_run(self, pf: PFClient, randstr: Callable[[str], str]):
+        def assert_func(details_dict):
+            return details_dict["outputs.func_input"] == [
+                "func_input",
+                "func_input",
+                "func_input",
+                "func_input",
+            ] and details_dict["outputs.obj_input"] == ["val", "val", "val", "val"]
+
         flow_path = Path(f"{EAGER_FLOWS_DIR}/basic_callable_class")
         run = pf.run(
             flow=flow_path,
@@ -1264,8 +1272,15 @@ class TestFlowRun:
             init={"obj_input": "val"},
             name=randstr("name"),
         )
-        run = pf.runs.stream(run)
-        assert run.status == RunStatus.COMPLETED
         assert run.properties["azureml.promptflow.init_kwargs"] == '{"obj_input":"val"}'
-        details = pf.runs.get_details(run)
-        assert details.shape[0] == 2
+
+        assert_batch_run_result(run, pf, assert_func)
+
+
+def assert_batch_run_result(run: Run, pf: PFClient, assert_func):
+    assert run.status == RunStatus.COMPLETED
+    assert "error" not in run._to_dict(), run._to_dict()["error"]
+    details = pf.get_details(run.name)
+    # convert DataFrame to dict
+    details_dict = details.to_dict(orient="list")
+    assert assert_func(details_dict), details_dict
