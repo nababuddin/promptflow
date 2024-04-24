@@ -12,7 +12,9 @@ import shutil
 import stat
 import subprocess
 import sys
+import time
 import uuid
+import webbrowser
 from dataclasses import MISSING, fields
 from importlib.metadata import version
 from os import PathLike
@@ -47,12 +49,15 @@ from promptflow._sdk._utils import (
     json_load,
     logger,
 )
+from promptflow._sdk._utils.chat_utils import get_info_for_flow_monitor, unregister_chat_session, update_session_config
+from promptflow._sdk._utils.serve_utils import find_available_port
 from promptflow._sdk._utils.signature_utils import (
     format_signature_type,
     infer_signature_for_flex_flow,
     merge_flow_signature,
 )
 from promptflow._sdk.entities._flows import FlexFlow, Flow, Prompty
+from promptflow._sdk.entities._flows.base import FlowBase
 from promptflow._sdk.entities._validation import ValidationResult
 from promptflow._utils.context_utils import _change_working_dir
 from promptflow._utils.flow_utils import (
@@ -384,6 +389,64 @@ class FlowOperations(TelemetryMixin):
         if skip_open_browser:
             sys.argv += ["--server.headless=true"]
         st_cli.main()
+
+    def _start_chat_monitor(
+        self,
+        flow: FlowBase,
+        *,
+        session_id: str,
+        session_url: str = None,
+        variant: str = None,
+        environment_variables: dict = None,
+        retry_interval: float = 1.0,
+        monitor_interval: float = 3.0,
+        **kwargs,
+    ):
+        """Refresh executor service.
+
+        :param flow: path to flow directory to refresh
+        """
+
+        flow.context.variant = variant
+
+        first_service_started, current_flow_hash = False, None
+        retry, max_retry = 0, 3
+
+        try:
+            while True:
+                # we should keep monitoring the original flow
+                flow_info = get_info_for_flow_monitor(
+                    session_id=session_id,
+                    flow_dir=flow.code,
+                )
+
+                if current_flow_hash != flow_info["hash"]:
+                    retry += 1
+                    if not first_service_started and retry > max_retry:
+                        raise UserErrorException(f"Failed to start debug service for flow after {max_retry} retrials.")
+                    serving_port = find_available_port()
+                    try:
+                        # TODO: start service
+
+                        update_session_config(session_id, serving_port=serving_port, flow_dir=flow.code)
+                        if not first_service_started and session_url:
+                            print(f"You can begin chat flow on {session_url}")
+                            webbrowser.open(session_url)
+                        print("Debug service updated...")
+
+                        current_flow_hash = flow_info["hash"]
+                        first_service_started = True
+                        time.sleep(monitor_interval)
+                    except Exception as e:
+                        logger.error(f"Failed to start service for flow {flow.code}, {e}")
+                        time.sleep(retry_interval)
+
+        except KeyboardInterrupt:
+            sys.exit(0)
+        finally:
+            # info log won't be printed by default
+            print("Shutdown debug service... exiting")
+            unregister_chat_session(session_id, flow_dir=flow.code)
 
     def _build_environment_config(self, flow_dag_path: Path):
         flow_info = load_yaml(flow_dag_path)

@@ -12,7 +12,6 @@ import sys
 import tempfile
 import webbrowser
 from pathlib import Path
-from urllib.parse import urlencode, urlunparse
 
 from promptflow._cli._params import (
     AppendToDictAction,
@@ -44,10 +43,10 @@ from promptflow._constants import ConnectionProviderConfig, FlowLanguage
 from promptflow._sdk._configuration import Configuration
 from promptflow._sdk._constants import PROMPT_FLOW_DIR_NAME
 from promptflow._sdk._pf_client import PFClient
-from promptflow._sdk._service.utils.utils import encrypt_flow_path
 from promptflow._sdk._utils import generate_yaml_entry_without_recover
+from promptflow._sdk._utils.chat_utils import construct_session_id, register_chat_session
 from promptflow._sdk.operations._flow_operations import FlowOperations
-from promptflow._utils.flow_utils import is_flex_flow, resolve_flow_path
+from promptflow._utils.flow_utils import is_flex_flow
 from promptflow._utils.logger_utils import get_cli_sdk_logger
 from promptflow.exceptions import ErrorTarget, UserErrorException
 
@@ -515,32 +514,33 @@ def _test_flow_multi_modal(args, pf_client):
             logger.info("Start streamlit with main script generated at: %s", main_script_path)
             pf_client.flows._chat_with_ui(script=main_script_path, skip_open_browser=args.skip_open_browser)
     else:
-        from promptflow._sdk._tracing import _invoke_pf_svc
+        from promptflow._sdk._load_functions import load_flow
+        from promptflow._sdk._service.utils.utils import get_port_from_config
+        from promptflow.tracing import start_trace
 
-        # Todo: use base64 encode for now, will consider whether need use encryption or use db to store flow path info
-        def generate_url(flow_path, port, url_params, enable_internal_features=False):
-            encrypted_flow_path = encrypt_flow_path(flow_path)
-            query_dict = {"flow": encrypted_flow_path}
-            if Configuration.get_instance().is_internal_features_enabled() or enable_internal_features:
-                query_dict.update({"enable_internal_features": "true", **url_params})
-            query_params = urlencode(query_dict)
-            return urlunparse(("http", f"127.0.0.1:{port}", "/v1.0/ui/chat", "", query_params, ""))
+        # trace the chat session
+        start_trace()
+        # pfs is already started in start_trace
+        pfs_port = get_port_from_config()
 
-        pfs_port = _invoke_pf_svc()
-        flow = generate_yaml_entry_without_recover(entry=args.flow)
+        flow = generate_yaml_entry_without_recover(args.flow)
         # flex flow without yaml file doesn't support /eval in chat window
-        enable_internal_features = True if flow != args.flow else False
-        flow_path_dir, flow_path_file = resolve_flow_path(flow)
-        flow_path = str(flow_path_dir / flow_path_file)
-        chat_page_url = generate_url(
-            flow_path,
-            pfs_port,
-            list_of_dict_to_dict(args.url_params),
+        enable_internal_features = flow != args.flow or Configuration.get_instance().is_internal_features_enabled()
+
+        # for entry like "package:entry_function", a temp flow.flex.yaml will be generated at flow
+        flow_entity = load_flow(flow)
+        session_id, session_url = register_chat_session(
+            construct_session_id(flow),
+            flow_dir=flow_entity.code,
+            pfs_port=pfs_port,
+            url_params=list_of_dict_to_dict(args.url_params),
             enable_internal_features=enable_internal_features,
         )
-        print(f"You can begin chat flow on {chat_page_url}")
-        if not args.skip_open_browser:
-            webbrowser.open(chat_page_url)
+        pf_client.flows._start_chat_monitor(
+            flow_entity,
+            session_id=session_id,
+            session_url=None if args.skip_open_browser else session_url,
+        )
 
 
 def _test_flow_interactive(args, pf_client, inputs, environment_variables):

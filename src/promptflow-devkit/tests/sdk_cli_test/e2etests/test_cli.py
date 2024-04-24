@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
 from pathlib import Path
 from tempfile import mkdtemp
@@ -24,7 +25,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from promptflow._cli._pf.entry import main
 from promptflow._constants import FLOW_FLEX_YAML, LINE_NUMBER_KEY, PF_USER_AGENT
 from promptflow._core.metric_logger import add_metric_logger
-from promptflow._sdk._constants import LOGGER_NAME, SCRUBBED_VALUE, ExperimentStatus
+from promptflow._sdk._constants import LOGGER_NAME, SCRUBBED_VALUE, ExperimentStatus, OSType
 from promptflow._sdk._errors import RunNotFoundError
 from promptflow._sdk.operations._local_storage_operations import LocalStorageOperations
 from promptflow._sdk.operations._run_operations import RunOperations
@@ -2686,18 +2687,37 @@ class TestCli:
         assert "Hello world" in stdout
         assert "val1" in stdout
 
-    def test_eager_flow_test_without_yaml_ui(self, pf, capsys):
-        run_pf_command(
-            "flow",
-            "test",
-            "--flow",
-            "entry:my_flow",
-            "--ui",
-            cwd=f"{EAGER_FLOWS_DIR}/simple_without_yaml_return_output",
+    def test_eager_flow_test_without_yaml_ui(self):
+        import platform
+
+        session_config_path = Path(
+            f"{EAGER_FLOWS_DIR}/simple_without_yaml_return_output/.promptflow/session_config.json"
         )
-        stdout, _ = capsys.readouterr()
-        assert "You can begin chat flow" in stdout
-        assert Path(f"{EAGER_FLOWS_DIR}/simple_without_yaml_return_output/flow.flex.yaml").exists()
+        try:
+            assert not session_config_path.is_file()
+
+            process = subprocess.Popen(
+                [
+                    "pf",
+                    "flow",
+                    "test",
+                    "--flow",
+                    "entry:my_flow",
+                    "--ui",
+                    "--skip-open-browser",
+                ],
+                cwd=f"{EAGER_FLOWS_DIR}/simple_without_yaml_return_output",
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if platform.system() == OSType.WINDOWS else 0,
+            )
+
+            time.sleep(10.0)
+            # process should not be terminated without KeyboardInterrupt
+            assert process.poll() is None
+            assert session_config_path.is_file()
+            process.terminate()
+        finally:
+            if session_config_path.is_file():
+                session_config_path.unlink()
 
     @pytest.mark.usefixtures("reset_tracer_provider")
     def test_pf_flow_test_with_collection(self):
