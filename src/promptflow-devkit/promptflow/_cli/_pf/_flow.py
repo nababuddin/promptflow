@@ -6,11 +6,8 @@ import argparse
 import importlib
 import json
 import os
-import shutil
-import subprocess
 import sys
 import tempfile
-import webbrowser
 from pathlib import Path
 
 from promptflow._cli._params import (
@@ -39,13 +36,13 @@ from promptflow._cli._pf._init_entry_generators import (
     copy_extra_files,
 )
 from promptflow._cli._utils import _copy_to_flow, activate_action, confirm, inject_sys_path, list_of_dict_to_dict
-from promptflow._constants import ConnectionProviderConfig, FlowLanguage
+from promptflow._constants import ConnectionProviderConfig
 from promptflow._sdk._configuration import Configuration
 from promptflow._sdk._constants import PROMPT_FLOW_DIR_NAME
 from promptflow._sdk._pf_client import PFClient
 from promptflow._sdk._utils import generate_yaml_entry_without_recover
 from promptflow._sdk._utils.chat_utils import construct_session_id, register_chat_session
-from promptflow._sdk.operations._flow_operations import FlowOperations
+from promptflow._sdk._utils.serve_utils import start_flow_service
 from promptflow._utils.flow_utils import is_flex_flow
 from promptflow._utils.logger_utils import get_cli_sdk_logger
 from promptflow.exceptions import ErrorTarget, UserErrorException
@@ -603,90 +600,19 @@ def serve_flow(args):
     logger.info("Start serve model: %s", args.source)
     # Set environment variable for local test
     source = Path(args.source)
-    logger.info(
-        "Start promptflow server with port %s",
-        args.port,
-    )
-    os.environ["PROMPTFLOW_PROJECT_PATH"] = source.absolute().as_posix()
     flow = load_flow(args.source)
-    if flow.language == FlowLanguage.CSharp:
-        serve_flow_csharp(args, source)
-    else:
-        serve_flow_python(args, source)
-    logger.info("Promptflow app ended")
-
-
-def serve_flow_csharp(args, source):
-    from promptflow._proxy._csharp_executor_proxy import EXECUTOR_SERVICE_DLL
-
-    try:
-        # Change working directory to model dir
-        logger.info(f"Change working directory to model dir {source}")
-        os.chdir(source)
-        command = [
-            "dotnet",
-            EXECUTOR_SERVICE_DLL,
-            "--port",
-            str(args.port),
-            "--yaml_path",
-            "flow.dag.yaml",
-            "--assembly_folder",
-            ".",
-            "--connection_provider_url",
-            "",
-            "--log_path",
-            "",
-            "--serving",
-        ]
-        subprocess.run(command, stdout=sys.stdout, stderr=sys.stderr)
-    except KeyboardInterrupt:
-        pass
-
-
-def _resolve_python_flow_additional_includes(source) -> Path:
-    # Resolve flow additional includes
-    from promptflow.client import load_flow
-
-    flow = load_flow(source)
-    with FlowOperations._resolve_additional_includes(flow.path) as resolved_flow_path:
-        if resolved_flow_path == flow.path:
-            return source
-        # Copy resolved flow to temp folder if additional includes exists
-        # Note: DO NOT use resolved flow path directly, as when inner logic raise exception,
-        # temp dir will fail due to file occupied by other process.
-        temp_flow_path = Path(tempfile.TemporaryDirectory().name)
-        shutil.copytree(src=resolved_flow_path.parent, dst=temp_flow_path, dirs_exist_ok=True)
-
-    return temp_flow_path
-
-
-def serve_flow_python(args, source):
-    from promptflow._sdk._configuration import Configuration
-    from promptflow.core._serving.app import create_app
-
-    static_folder = args.static_folder
-    if static_folder:
-        static_folder = Path(static_folder).absolute().as_posix()
-    config = list_of_dict_to_dict(args.config)
-    pf_config = Configuration(overrides=config)
-    logger.info(f"Promptflow config: {pf_config}")
-    connection_provider = pf_config.get_connection_provider()
-    source = _resolve_python_flow_additional_includes(source)
-    os.environ["PROMPTFLOW_PROJECT_PATH"] = source.absolute().as_posix()
-    logger.info(f"Change working directory to model dir {source}")
-    os.chdir(source)
-    app = create_app(
-        static_folder=static_folder,
+    start_flow_service(
+        flow.language,
+        static_folder=args.static_folder,
+        flow_dir=source,
+        config=list_of_dict_to_dict(args.config),
         environment_variables=list_of_dict_to_dict(args.environment_variables),
-        connection_provider=connection_provider,
         init=list_of_dict_to_dict(args.init),
+        host=args.host,
+        port=args.port,
+        skip_open_browser=args.skip_open_browser,
     )
-    if not args.skip_open_browser:
-        target = f"http://{args.host}:{args.port}"
-        logger.info(f"Opening browser {target}...")
-        webbrowser.open(target)
-    # Debug is not supported for now as debug will rerun command, and we changed working directory.
-    app.run(port=args.port, host=args.host)
+    logger.info("Promptflow app ended")
 
 
 def build_flow(args):
