@@ -58,7 +58,7 @@ In promptflow, events emitted by the PromptFlow framework follow the format belo
 
 - event MUST has attributes
 - event attributes MUST contain a key named `payload`, which refers to the data carried within an event.
-- event attributes payload MUST be a JSON string that represent an oject.
+- event attributes payload MUST be a JSON string that represent an object.
 
 | Event | Payload Description | Payload Examples | [Requirement Level](https://opentelemetry.io/docs/specs/semconv/general/attribute-requirement-level/) |
 |---|---|---|---|
