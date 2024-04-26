@@ -12,7 +12,6 @@ def enrich_retrieval_span(span: Span, inputs, output: list):
     if "query" in inputs:
         query = inputs["query"]
         span.set_attribute("retrieval.query", query)
-        #  span.add_event("promptflow.retrieval.query", {"payload": query})
     if not isinstance(output, list):
         return
     docs = []
@@ -28,7 +27,6 @@ def enrich_retrieval_span(span: Span, inputs, output: list):
         if item:
             docs.append(item)
     if docs:
-        #  span.set_attribute("retrieval.documents", json.dumps(docs))
         span.add_event("promptflow.retrieval.documents", {"payload": json.dumps(docs)})
 
 
