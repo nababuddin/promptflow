@@ -38,4 +38,18 @@ global_span_enricher.register(TraceType.RETRIEVAL, enrich_retrieval_span)
 def retrieval(
     func: Callable,
 ) -> Callable:
+    """Use @retrieval to define retrieval spans.
+    For example:
+    @retrieval
+    def my_retrieval_func(query: str) -> List[Dict[str, Any]]:
+        return [{"id": "1", "score": 0.9, "content": "content", "metadata": {}}]
+
+    Note:
+    One keyword argument "query" is required for the function, it is shown as the retrieval query in the trace.
+    The return value should be a list of dictionaries, each dictionary represents a document with the following keys:
+    - content: The content of the document.
+    - id(Optional): The unique identifier of the document.
+    - score(Optional): The relevance score of the document.
+    - metadata(Optional): Other metadata of the document.
+    """
     return _traced(func, trace_type=TraceType.RETRIEVAL)
