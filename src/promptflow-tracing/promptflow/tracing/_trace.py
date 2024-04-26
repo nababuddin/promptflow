@@ -151,12 +151,17 @@ class SpanEnricher:
         self._type2enricher = {}
 
     def register(self, trace_type, enricher):
+        sign = inspect.signature(enricher)
+        params = {p.name for p in sign.parameters.values()}
+        if params != {"span", "inputs", "output"}:
+            msg = f"The enricher function {enricher} should have the signature (span, inputs, output), got {params}"
+            raise ValueError(msg)
         self._type2enricher[trace_type] = enricher
 
     def enrich_span(self, span, inputs, output, trace_type):
         if trace_type not in self._type2enricher:
             return
-        self._type2enricher[trace_type](span, inputs, output)
+        self._type2enricher[trace_type](span=span, inputs=inputs, output=output)
 
 
 global_span_enricher = SpanEnricher()
@@ -311,7 +316,7 @@ def _is_single_input(embedding_inputs):
     return False
 
 
-def enrich_span_with_llm_output(span, output):
+def enrich_span_with_llm_output(span, inputs, output):
     if not IS_LEGACY_OPENAI:
         from openai.types.chat.chat_completion import ChatCompletion
         from openai.types.completion import Completion
