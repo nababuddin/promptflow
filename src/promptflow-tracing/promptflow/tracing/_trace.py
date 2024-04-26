@@ -146,14 +146,26 @@ def enrich_span_with_input(span, input):
     return input
 
 
+class SpanEnricher:
+    def __init__(self):
+        self._type2enricher = {}
+
+    def register(self, trace_type, enricher):
+        self._type2enricher[trace_type] = enricher
+
+    def enrich_span(self, span, inputs, output, trace_type):
+        if trace_type not in self._type2enricher:
+            return
+        self._type2enricher[trace_type](span, inputs, output)
+
+
+global_span_enricher = SpanEnricher()
+
+
 def enrich_span_with_trace_type(span, inputs, output, trace_type):
-    if trace_type == TraceType.LLM:
-        # Handle the non-streaming output of LLM, the streaming output will be handled in traced_generator.
+    global_span_enricher.enrich_span(span, inputs, output, trace_type)
+    if trace_type in {TraceType.LLM, TraceType.EMBEDDING}:
         token_collector.collect_openai_tokens(span, output)
-        enrich_span_with_llm_output(span, output)
-    elif trace_type == TraceType.EMBEDDING:
-        token_collector.collect_openai_tokens(span, output)
-        enrich_span_with_embedding(span, inputs, output)
     enrich_span_with_openai_tokens(span, trace_type)
     enrich_span_with_output(span, output)
     output = trace_iterator_if_needed(span, inputs, output)
@@ -518,3 +530,7 @@ def trace(func: Callable = None) -> Callable:
     """
 
     return _traced(func, trace_type=TraceType.FUNCTION)
+
+
+global_span_enricher.register(TraceType.LLM, enrich_span_with_llm_output)
+global_span_enricher.register(TraceType.EMBEDDING, enrich_span_with_embedding)
